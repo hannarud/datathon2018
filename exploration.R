@@ -5,7 +5,7 @@ require(data.table)
 require(stringi)
 require(countrycode)
 require(stringr)
-
+require(dplyr)
 #--------------------------- preprocess ---------------------------------------
 
 dataset <- as.data.table(read.table("data/Dataset_BNB_20180710.txt", sep = ';', header = TRUE, stringsAsFactors = FALSE))
@@ -36,13 +36,26 @@ dataset$TRAN_DATE <- as.Date(as.character(dataset$TRAN_DATE), format = "%d/%m/%Y
 
 # upper to cities
 dataset$TRAN_CITY <- toupper(dataset$TRAN_CITY)
+dataset$TERMINAL_LOCATION <- toupper(dataset$TERMINAL_LOCATION)
 
-saveRDS(file = "data/BNB_lat.rds", dataset)
-write.csv2(file = "data/BNB_lat.csv", dataset, sep = ";")
-
+# puntuation
 dataset$TERMINAL_LOCATION <- str_replace_all(dataset$TERMINAL_LOCATION, '[[:punct:]]+', ' ')
 dataset$CARD_TYPE <- str_replace_all(dataset$CARD_TYPE, '[[:punct:]]+', ' ')
 
+dataset$TRAN_CITY <- str_replace_all(dataset$TRAN_CITY, '[#\\/\\:]', ' ')
+dataset$TRAN_CITY <- str_replace_all(dataset$TRAN_CITY, '\\-', '')
+dataset$TRAN_CITY <- str_replace_all(dataset$TRAN_CITY, '\\,', '')
+dataset$TRAN_CITY <- str_replace_all(dataset$TRAN_CITY, 'HTTPS', '')
+dataset$TRAN_CITY <- str_replace_all(dataset$TRAN_CITY, '@', '.')
+dataset$TRAN_CITY <- str_replace_all(dataset$TRAN_CITY, '\\.', ' ')
+dataset$TRAN_CITY <- str_replace_all(dataset$TRAN_CITY, 'R\\-N', 'RN')
+
+# dataset <- str_trim(dataset)
+# dataset <- gsub("\\s+", " ", dataset)
+
+
+saveRDS(file = "data/BNB_lat.rds", dataset)
+write.csv2(file = "data/BNB_lat.csv", dataset, sep = ";")
 #--------------------------- primary analysis---------------------------------
 #load clean RDS
 dataset <- as.data.table(readRDS("data/BNB_lat.RDS"))
@@ -172,12 +185,19 @@ table(dataset$IS_CITIZEN) ## Factor
 
 table(dataset$CLIENT_REGION)  ## Factor
 
-saveRDS(dataset, "data/Dataset_BNB_20180710_for_clustering.rds")
 
 # add categories to payment system and class of cards
 
 dataset$CARD_SYSTEM_TYPE <- str_replace_all(str_extract_all(dataset$CARD_TYPE, '[[:alpha:]]+ '), ' ', '')
 dataset$CARD_CLASS_TYPE <- str_replace_all(str_extract_all(dataset$CARD_TYPE, ' [[:alpha:]]+'), ' ', '')
-dataset$CARD_CLASS_LEVEL <- str_replace_all(str_extract_all(dataset$CARD_CLASS_TYPE, '(Maestro)|(Electron)'), ' ', 'ECONOMY')
-dataset$CARD_CLASS_LEVEL <- str_replace_all(str_extract_all(dataset$CARD_CLASS_TYPE, '(Classic)|(Standard)'), ' ', 'STANDARD')
-dataset$CARD_CLASS_LEVEL <- str_replace_all(str_extract_all(dataset$CARD_CLASS_TYPE, '(Gold)|(Platinum)|(Infinite)'), ' ', 'PREMIUM')
+dataset$CARD_CLASS_LEVEL <- dataset$CARD_CLASS_TYPE
+dataset$CARD_CLASS_LEVEL <- str_replace_all(dataset$CARD_CLASS_LEVEL, 'Maestro', 'ECONOMY')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(dataset$CARD_CLASS_LEVEL, 'Electron', 'ECONOMY')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(dataset$CARD_CLASS_LEVEL, 'Classic', 'STANDARD')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(dataset$CARD_CLASS_LEVEL, 'Standard', 'STANDARD')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(dataset$CARD_CLASS_LEVEL, 'Gold', 'PREMIUM')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(dataset$CARD_CLASS_LEVEL, 'Platinum', 'SUPERPREMIUM')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(dataset$CARD_CLASS_LEVEL, 'Infinite', 'SUPERPREMIUM')
+
+saveRDS(dataset, "data/Dataset_BNB_20180710_for_clustering.rds")
+write.csv2(file = "data/Dataset_BNB_20180710_for_clustering.csv", dataset, sep = ";", row.names = FALSE)
