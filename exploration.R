@@ -39,6 +39,9 @@ require(stringr)
 # # 
 # # dataset <- readRDS("data/Dataset_BNB_20180710.rds")
 
+dataset$TERMINAL_LOCATION <- str_replace_all(dataset$TERMINAL_LOCATION, '[[:punct:]]+', ' ')
+dataset$CARD_TYPE <- str_replace_all(dataset$CARD_TYPE, '[[:punct:]]+', ' ')
+
 #--------------------------- primary analysis---------------------------------
 #load clean RDS
 dataset <- as.data.table(readRDS("data/BNB_lat.RDS"))
@@ -167,3 +170,11 @@ table(dataset$IS_CITIZEN) ## Factor
 table(dataset$CLIENT_REGION)  ## Factor
 
 saveRDS(dataset, "data/Dataset_BNB_20180710_for_clustering.rds")
+
+# add categories to payment system and class of cards
+
+dataset$CARD_SYSTEM_TYPE <- str_replace_all(str_extract_all(dataset$CARD_TYPE, '[[:alpha:]]+ '), ' ', '')
+dataset$CARD_CLASS_TYPE <- str_replace_all(str_extract_all(dataset$CARD_TYPE, ' [[:alpha:]]+'), ' ', '')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(str_extract_all(dataset$CARD_CLASS_TYPE, '(Maestro)|(Electron)'), ' ', 'ECONOMY')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(str_extract_all(dataset$CARD_CLASS_TYPE, '(Classic)|(Standard)'), ' ', 'STANDARD')
+dataset$CARD_CLASS_LEVEL <- str_replace_all(str_extract_all(dataset$CARD_CLASS_TYPE, '(Gold)|(Platinum)|(Infinite)'), ' ', 'PREMIUM')
