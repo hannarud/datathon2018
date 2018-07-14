@@ -89,15 +89,18 @@ length(unique(toupper(dataset$TRAN_COUNTRY))) # TODO Kseniya
 
 length(unique(toupper(dataset$TRAN_CITY)))
 
+dataset$TRAN_AMOUNT <- as.double(dataset$TRAN_AMOUNT)
+dataset$TRAN_AMOUNT_BYN <- as.double(dataset$TRAN_AMOUNT_BYN)
+
 length(unique(toupper(dataset$CLIENT_ID))) ## 31287
 length(unique(toupper(dataset$CONTRACT_ID))) ## 34015
 
 # Проверка, что не существует двух клиентов с одинаковым CONTRACT_ID
 d <- function(x) duplicated(x) | duplicated(x, fromLast=TRUE)
-# One to one
-dataset[!d(dataset$CLIENT_ID) & !d(dataset$CONTRACT_ID),]
-# One to many
-dataset[d(dataset$CLIENT_ID) & !d(dataset$CONTRACT_ID),]
+# # One to one
+# dataset[!d(dataset$CLIENT_ID) & !d(dataset$CONTRACT_ID),]
+# # One to many
+# dataset[d(dataset$CLIENT_ID) & !d(dataset$CONTRACT_ID),]
 # Many to one
 sum(!d(dataset$CLIENT_ID) & d(dataset$CONTRACT_ID)) # So 9 contracts belong to more than one client
 which(!d(dataset$CLIENT_ID) & d(dataset$CONTRACT_ID))
@@ -125,3 +128,5 @@ table(dataset$IS_RESIDENT) ## Factor
 table(dataset$IS_CITIZEN) ## Factor
 
 table(dataset$CLIENT_REGION)  ## Factor
+
+saveRDS(dataset, "data/Dataset_BNB_20180710_for_clustering.rds")
