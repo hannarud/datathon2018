@@ -1,43 +1,44 @@
 #---------------------------sys-----------------------------------------------
-# Sys.setlocale(category = "LC_CTYPE", locale = "Russian")
+Sys.setlocale(category = "LC_CTYPE", locale = "Russian")
 
 require(data.table)
-# require(stringi)
+require(stringi)
 require(countrycode)
 require(stringr)
 
 #--------------------------- preprocess ---------------------------------------
 
-# dataset <- as.data.table(read.table("data/Dataset_BNB_20180710.txt",sep = ';', header = TRUE, na.strings = c("na",""), stringsAsFactors = FALSE))
-# 
-# # convert cyrrilic to latin
-# dataset$CLIENT_REGION <- str_replace_all(dataset$CLIENT_REGION, 'ь','')
-# dataset$CLIENT_REGION <- str_replace_all(dataset$CLIENT_REGION, 'я','а')
-# dataset$CLIENT_REGION <- as.factor(sapply(dataset$CLIENT_REGION, function(x) {stringi::stri_trans_general(x, 'latin')}))
-# 
-# # mark binary as factor
-# dataset$IS_CITIZEN <- as.factor(dataset$IS_CITIZEN)
-# dataset$IS_RESIDENT <- as.factor(dataset$IS_RESIDENT)
-# dataset$IS_CREDIT_CARD <- as.factor(dataset$IS_CREDIT_CARD)
-# 
-# # convert country to 3 letters system
-# index_t = grepl("^[[:alpha:]]{2}$",dataset$TRAN_COUNTRY) 
-# dataset[index_t]$TRAN_COUNTRY = countrycode(dataset$TRAN_COUNTRY[index_t], "iso2c", "iso3c")
-# 
-# # dates as Date type
-# dataset$TRAN_DATE <- as.Date(dataset$TRAN_DATE, format = "%d/%m/%Y")
-# 
-# # upper to cities
-# dataset$TRAN_CITY <- toupper(dataset$TRAN_CITY)
-# 
-# 
-# saveRDS(file = "data/BNB_lat.rds", dataset)
-# # write.csv2(file = "data/BNB_lat.csv", dataset, sep = ";")
-# 
-# # dataset <- read.csv2(file = "data/Dataset_BNB_20180710.txt", stringsAsFactors = FALSE)
-# # saveRDS(dataset, "data/Dataset_BNB_20180710.rds")
-# # 
-# # dataset <- readRDS("data/Dataset_BNB_20180710.rds")
+dataset <- as.data.table(read.table("data/Dataset_BNB_20180710.txt", sep = ';', header = TRUE, stringsAsFactors = FALSE))
+saveRDS(dataset, "data/Dataset_BNB_20180710.rds")
+
+dataset <- readRDS("data/Dataset_BNB_20180710.rds")
+
+# convert cyrrilic to latin
+dataset$CLIENT_REGION <- str_replace_all(dataset$CLIENT_REGION, 'ь','')
+dataset$CLIENT_REGION <- str_replace_all(dataset$CLIENT_REGION, 'я','а')
+dataset$CLIENT_REGION <- as.factor(sapply(dataset$CLIENT_REGION, function(x) {stringi::stri_trans_general(x, 'latin')}))
+
+# mark binary as factor
+dataset$IS_CITIZEN <- as.factor(dataset$IS_CITIZEN)
+dataset$IS_RESIDENT <- as.factor(dataset$IS_RESIDENT)
+dataset$IS_CREDIT_CARD <- as.factor(dataset$IS_CREDIT_CARD)
+
+# Convert amounts to double
+dataset$TRAN_AMOUNT <- as.double(dataset$TRAN_AMOUNT)
+dataset$TRAN_AMOUNT_BYN <- as.double(dataset$TRAN_AMOUNT_BYN)
+
+# convert country to 3 letters system
+index_t = grepl("^[[:alpha:]]{2}$",dataset$TRAN_COUNTRY)
+dataset[index_t]$TRAN_COUNTRY = countrycode(dataset$TRAN_COUNTRY[index_t], "iso2c", "iso3c")
+
+# dates as Date type
+dataset$TRAN_DATE <- as.Date(as.character(dataset$TRAN_DATE), format = "%d/%m/%Y")
+
+# upper to cities
+dataset$TRAN_CITY <- toupper(dataset$TRAN_CITY)
+
+saveRDS(file = "data/BNB_lat.rds", dataset)
+write.csv2(file = "data/BNB_lat.csv", dataset, sep = ";")
 
 dataset$TERMINAL_LOCATION <- str_replace_all(dataset$TERMINAL_LOCATION, '[[:punct:]]+', ' ')
 dataset$CARD_TYPE <- str_replace_all(dataset$CARD_TYPE, '[[:punct:]]+', ' ')
@@ -84,7 +85,6 @@ length(table(dataset$MCC_CODE)) # 368 - их мало и они очень по�
 
 table(dataset$MCC_CODE, dataset$TRAN_TYPE) # В принципе, CASH вписывается всего в 2 MCC_CODE
 
-dataset$TRAN_DATE <- as.Date(as.character(dataset$TRAN_DATE), format = "%d/%m/%Y")
 min(dataset$TRAN_DATE)
 max(dataset$TRAN_DATE)
 
@@ -105,6 +105,12 @@ semi_holiday <- as.Date(c("02/01/2018",
                           "30/04/2018"), format = "%d/%m/%Y")
 dataset$daytype[dataset$TRAN_DATE %in% semi_holiday] <- "semi"
 dataset$daytype <- as.factor(dataset$daytype)
+
+dataset$month <- format(dataset$TRAN_DATE, "%m")
+days_in_month <- data.frame(month = c("01", "02", "03", "04", "05", "06"),
+                            num_of_days_in_month = c(31, 28, 31, 30, 31, 30))
+dataset <- left_join(dataset, days_in_month, by = c("month"))
+dataset$week <- strftime(dataset$TRAN_DATE, format = "%V")
 
 library(ggplot2)
 
@@ -128,9 +134,6 @@ location_tabl <- as.data.frame(table(dataset$TERMINAL_LOCATION))
 length(unique(toupper(dataset$TRAN_COUNTRY))) # TODO Kseniya
 
 length(unique(toupper(dataset$TRAN_CITY)))
-
-dataset$TRAN_AMOUNT <- as.double(dataset$TRAN_AMOUNT)
-dataset$TRAN_AMOUNT_BYN <- as.double(dataset$TRAN_AMOUNT_BYN)
 
 length(unique(toupper(dataset$CLIENT_ID))) ## 31287
 length(unique(toupper(dataset$CONTRACT_ID))) ## 34015
