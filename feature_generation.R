@@ -67,6 +67,103 @@ summarized_num_of_transaction_by_week <- dataset %>% group_by(CLIENT_ID, week) %
 
 # Пока для недели по юзерам не аггрегируем
 
+# Процент транзакций пользователя в иностранной валюте - в числе транзакций и в сумме
+summarized_transaction_by_currency <- dataset %>% group_by(CLIENT_ID, TRAN_CURRENCY) %>%
+  summarise(sum_tran_by_currency = sum(TRAN_AMOUNT_BYN),
+            num_of_tran_by_currency = n())
+
+summarized_transaction_by_currency$in_BYN <- ifelse(summarized_transaction_by_currency$TRAN_CURRENCY == 933, "in_BYN", "non_BYN")
+
+summarized_transaction_by_currency_sum <- summarized_transaction_by_currency %>% group_by(CLIENT_ID, in_BYN) %>%
+  summarise(sum_BYN_or_not = sum(sum_tran_by_currency),
+            num_BYN_or_not = sum(num_of_tran_by_currency))
+
+summarized_transaction_by_currency_sum_finally <- data.frame(
+  CLIENT_ID = unique(summarized_transaction_by_currency_sum$CLIENT_ID))
+
+summarized_transaction_by_currency_sum_finally$percent_sum_BYN <- sapply(
+  X = summarized_transaction_by_currency_sum_finally$CLIENT_ID, function(x) {
+    sum_BYN = summarized_transaction_by_currency_sum$sum_BYN_or_not[summarized_transaction_by_currency_sum$in_BYN == "in_BYN"  & summarized_transaction_by_currency_sum$CLIENT_ID == x]
+    if(length(sum_BYN) == 0) {
+      sum_BYN = 0
+    }
+    sum_not_BYN = summarized_transaction_by_currency_sum$sum_BYN_or_not[summarized_transaction_by_currency_sum$in_BYN == "non_BYN" & summarized_transaction_by_currency_sum$CLIENT_ID == x]
+    if(length(sum_not_BYN) == 0) {
+      sum_not_BYN = 0
+    }
+    return(round(sum_BYN/(sum_BYN + sum_not_BYN)*100, digits = 2))
+  })
+
+summarized_transaction_by_currency_sum_finally$percent_transactions_BYN <- sapply(
+  X = summarized_transaction_by_currency_sum_finally$CLIENT_ID, function(x) {
+    num_BYN = summarized_transaction_by_currency_sum$num_BYN_or_not[summarized_transaction_by_currency_sum$in_BYN == "in_BYN"  & summarized_transaction_by_currency_sum$CLIENT_ID == x]
+    if(length(num_BYN) == 0) {
+      num_BYN = 0
+    }
+    num_not_BYN = summarized_transaction_by_currency_sum$num_BYN_or_not[summarized_transaction_by_currency_sum$in_BYN == "non_BYN" & summarized_transaction_by_currency_sum$CLIENT_ID == x]
+    if(length(num_not_BYN) == 0) {
+      num_not_BYN = 0
+    }
+    return(round(num_BYN/(num_BYN + num_not_BYN)*100, digits = 2))
+  })
+
+# Процент транзакций пользователя за границей (т.е. и страна не Беларусь, и валюта не белрубль)
+summarized_transaction_by_currency_and_country <- dataset %>% group_by(CLIENT_ID, TRAN_COUNTRY, TRAN_CURRENCY) %>%
+  summarise(sum_tran_by_currency = sum(TRAN_AMOUNT_BYN),
+            num_of_tran_by_currency = n())
+
+summarized_transaction_by_currency_and_country$abroad <- ifelse(
+  summarized_transaction_by_currency_and_country$TRAN_COUNTRY != "BLR" & 
+    summarized_transaction_by_currency_and_country$TRAN_CURRENCY != 933, "abroad", "in_BLR")
+
+summarized_transaction_by_currency_and_country_sum <- summarized_transaction_by_currency_and_country %>%
+  group_by(CLIENT_ID, abroad) %>%
+  summarise(sum_abroad_or_not = sum(sum_tran_by_currency),
+            num_abroad_or_not = sum(num_of_tran_by_currency))
+
+summarized_transaction_by_currency_and_country_sum_finally <- data.frame(
+  CLIENT_ID = unique(summarized_transaction_by_currency_and_country_sum$CLIENT_ID))
+
+summarized_transaction_by_currency_and_country_sum_finally$percent_sum_abroad <- sapply(
+  X = summarized_transaction_by_currency_and_country_sum_finally$CLIENT_ID, function(x) {
+    sum_abroad = summarized_transaction_by_currency_and_country_sum$sum_abroad_or_not[
+      summarized_transaction_by_currency_and_country_sum$abroad == "abroad"  &
+        summarized_transaction_by_currency_and_country_sum$CLIENT_ID == x]
+    if(length(sum_abroad) == 0) {
+      sum_abroad = 0
+    }
+    sum_in_BLR = summarized_transaction_by_currency_and_country_sum$sum_abroad_or_not[
+      summarized_transaction_by_currency_and_country_sum$in_BYN == "in_BLR" &
+        summarized_transaction_by_currency_and_country_sum$CLIENT_ID == x]
+    if(length(sum_in_BLR) == 0) {
+      sum_in_BLR = 0
+    }
+    return(round(sum_abroad/(sum_abroad + sum_in_BLR)*100, digits = 2))
+  })
+
+summarized_transaction_by_currency_sum_finally$percent_num_abroad <- sapply(
+  X = summarized_transaction_by_currency_sum_finally$CLIENT_ID, function(x) {
+    sum_abroad = summarized_transaction_by_currency_and_country_sum$sum_abroad_or_not[
+      summarized_transaction_by_currency_and_country_sum$abroad == "abroad"  &
+        summarized_transaction_by_currency_and_country_sum$CLIENT_ID == x]
+    if(length(sum_abroad) == 0) {
+      sum_abroad = 0
+    }
+    sum_in_BLR = summarized_transaction_by_currency_and_country_sum$sum_abroad_or_not[
+      summarized_transaction_by_currency_and_country_sum$in_BYN == "in_BLR" &
+        summarized_transaction_by_currency_and_country_sum$CLIENT_ID == x]
+    if(length(sum_in_BLR) == 0) {
+      sum_in_BLR = 0
+    }
+    return(round(sum_abroad/(sum_abroad + sum_in_BLR)*100, digits = 2))
+  })
+
+# Процент интернет-транзакций пользователя - но пока непонятно, как их выщемить. Это однозначно транзакции в стране не Беларусь, но в белорусских рублях, а что еще?
+
+# По MCC кодам проверить, на какие категории тратились деньги в процентах
+
+# дынаміка: sum(month1+month2+month3) < sum(month4 + month5 + month6)
+
 # Final table with features by client
 
 length(unique(dataset$CLIENT_ID)) ## 31287
@@ -95,6 +192,7 @@ client_dataset$HAS_FOREIGN_CURRENCY_CARD[is.na(client_dataset$HAS_FOREIGN_CURREN
 rm(temp)
 
 # Joining with previously obtained values
+client_dataset <- left_join(client_dataset, summarized_transaction_by_currency_sum_finally, by = c("CLIENT_ID"))
 client_dataset <- left_join(client_dataset, summarized_amounts_ever, by = c("CLIENT_ID"))
 client_dataset <- left_join(client_dataset, summarized_num_of_transactions_by_day_by_client, by = c("CLIENT_ID"))
 client_dataset <- left_join(client_dataset, summarized_num_of_transactions_by_month_by_client, by = c("CLIENT_ID"))
@@ -104,33 +202,3 @@ dim(client_dataset)
 sum(is.na(client_dataset))
 
 saveRDS(object = client_dataset, file = "data/client_dataset.rds")
-
-
-# Закончили работать с суммами и количеством транзакций, теперь дополняем другой информацией
-
-
-
-
-
-
-
-# Проверка, что не существует двух клиентов с одинаковым CONTRACT_ID
-d <- function(x) duplicated(x) | duplicated(x, fromLast=TRUE)
-# # One to one
-# dataset[!d(dataset$CLIENT_ID) & !d(dataset$CONTRACT_ID),]
-# # One to many
-# dataset[d(dataset$CLIENT_ID) & !d(dataset$CONTRACT_ID),]
-# Many to one
-sum(!d(dataset$CLIENT_ID) & d(dataset$CONTRACT_ID)) # So 9 contracts belong to more than one client
-which(!d(dataset$CLIENT_ID) & d(dataset$CONTRACT_ID))
-
-dataset[which(!d(dataset$CLIENT_ID) & d(dataset$CONTRACT_ID)), ]
-table(dataset$CLIENT_ID[dataset$CONTRACT_ID == 18734873], dataset$CONTRACT_ID[dataset$CONTRACT_ID == 18734873])
-
-length(unique(toupper(dataset$CARD_ID))) ## 38739
-
-
-
-
-
-
