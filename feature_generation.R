@@ -60,6 +60,8 @@ summarized_num_of_transactions_by_month_by_client$sigma_total_amount_of_payments
 summarized_num_of_transactions_by_month_by_client$sigma_average_sum_of_payments_per_month[
   is.na(summarized_num_of_transactions_by_month_by_client$sigma_average_sum_of_payments_per_month)] <- 0
 
+# дынаміка: sum(month1+month2+month3) < sum(month4 + month5 + month6)
+
 # По количеству транзакций за каждую неделю
 summarized_num_of_transaction_by_week <- dataset %>% group_by(CLIENT_ID, week) %>%
   summarise(num_of_transaction_per_week = n(),
@@ -133,7 +135,7 @@ summarized_transaction_by_currency_and_country_sum_finally$percent_sum_abroad <-
       sum_abroad = 0
     }
     sum_in_BLR = summarized_transaction_by_currency_and_country_sum$sum_abroad_or_not[
-      summarized_transaction_by_currency_and_country_sum$in_BYN == "in_BLR" &
+      summarized_transaction_by_currency_and_country_sum$abroad == "in_BLR" &
         summarized_transaction_by_currency_and_country_sum$CLIENT_ID == x]
     if(length(sum_in_BLR) == 0) {
       sum_in_BLR = 0
@@ -141,28 +143,33 @@ summarized_transaction_by_currency_and_country_sum_finally$percent_sum_abroad <-
     return(round(sum_abroad/(sum_abroad + sum_in_BLR)*100, digits = 2))
   })
 
-summarized_transaction_by_currency_sum_finally$percent_num_abroad <- sapply(
-  X = summarized_transaction_by_currency_sum_finally$CLIENT_ID, function(x) {
-    sum_abroad = summarized_transaction_by_currency_and_country_sum$sum_abroad_or_not[
+summarized_transaction_by_currency_and_country_sum_finally$percent_transactions_abroad <- sapply(
+  X = summarized_transaction_by_currency_and_country_sum_finally$CLIENT_ID, function(x) {
+    num_abroad = summarized_transaction_by_currency_and_country_sum$num_abroad_or_not[
       summarized_transaction_by_currency_and_country_sum$abroad == "abroad"  &
         summarized_transaction_by_currency_and_country_sum$CLIENT_ID == x]
-    if(length(sum_abroad) == 0) {
-      sum_abroad = 0
+    if(length(num_abroad) == 0) {
+      num_abroad = 0
     }
-    sum_in_BLR = summarized_transaction_by_currency_and_country_sum$sum_abroad_or_not[
-      summarized_transaction_by_currency_and_country_sum$in_BYN == "in_BLR" &
+    num_in_BLR = summarized_transaction_by_currency_and_country_sum$num_abroad_or_not[
+      summarized_transaction_by_currency_and_country_sum$abroad == "in_BLR" &
         summarized_transaction_by_currency_and_country_sum$CLIENT_ID == x]
-    if(length(sum_in_BLR) == 0) {
-      sum_in_BLR = 0
+    if(length(num_in_BLR) == 0) {
+      num_in_BLR = 0
     }
-    return(round(sum_abroad/(sum_abroad + sum_in_BLR)*100, digits = 2))
+    return(round(num_abroad/(num_abroad + num_in_BLR)*100, digits = 2))
   })
 
 # Процент интернет-транзакций пользователя - но пока непонятно, как их выщемить. Это однозначно транзакции в стране не Беларусь, но в белорусских рублях, а что еще?
 
-# По MCC кодам проверить, на какие категории тратились деньги в процентах
-
-# дынаміка: sum(month1+month2+month3) < sum(month4 + month5 + month6)
+# По сумме транзакций за все время
+summarized_amounts_ever <- dataset %>% group_by(CLIENT_ID) %>%
+  summarise(total_amount_of_transactions = n(),
+            total_amount_paid = sum(TRAN_AMOUNT_BYN),
+            max_sum_ever = max(TRAN_AMOUNT_BYN),
+            mode_sum_ever = getmode(TRAN_AMOUNT_BYN),
+            med_sum_ever = median(TRAN_AMOUNT_BYN),
+            min_sum_ever = min(TRAN_AMOUNT_BYN))
 
 # Final table with features by client
 
@@ -193,6 +200,7 @@ rm(temp)
 
 # Joining with previously obtained values
 client_dataset <- left_join(client_dataset, summarized_transaction_by_currency_sum_finally, by = c("CLIENT_ID"))
+client_dataset <- left_join(client_dataset, summarized_transaction_by_currency_and_country_sum_finally, by = c("CLIENT_ID"))
 client_dataset <- left_join(client_dataset, summarized_amounts_ever, by = c("CLIENT_ID"))
 client_dataset <- left_join(client_dataset, summarized_num_of_transactions_by_day_by_client, by = c("CLIENT_ID"))
 client_dataset <- left_join(client_dataset, summarized_num_of_transactions_by_month_by_client, by = c("CLIENT_ID"))
@@ -202,3 +210,55 @@ dim(client_dataset)
 sum(is.na(client_dataset))
 
 saveRDS(object = client_dataset, file = "data/client_dataset.rds")
+
+
+
+# По MCC кодам проверить, на какие категории тратились деньги в процентах
+mcc_categories <- read.csv("data/mcc_combined_hierarchical131verA1 (1).csv", stringsAsFactors = FALSE)
+mcc_categories <- mcc_categories[, c("Var1", "step3")]
+names(mcc_categories)[names(mcc_categories) == "step3"] <- "Category"
+
+dataset <- left_join(dataset, mcc_categories, by = c("MCC_CODE" = "Var1"))
+
+table(dataset$Category)
+
+dataset_categorized <- dataset %>% group_by(CLIENT_ID, Category) %>%
+  summarise(num_transactions = n(),
+            sum_transactions = sum(TRAN_AMOUNT_BYN))
+
+library(plyr)
+
+dataset_categorized_userpicture <- ddply(dataset_categorized, .(CLIENT_ID), mutate,
+                                         num_transactions_percantage = round(num_transactions / sum(num_transactions) * 100, 2),
+                                         sum_transactions_percantage = round(sum_transactions / sum(sum_transactions) * 100, 2))
+dataset_categorized_userpicture$num_transactions <- NULL
+dataset_categorized_userpicture$sum_transactions <- NULL
+
+dataset_categorized_userpicture_num_transaction <- select(dataset_categorized_userpicture, - sum_transactions_percantage)
+dataset_categorized_userpicture_sum_transaction <- select(dataset_categorized_userpicture, - num_transactions_percantage)
+
+library(tidyr)
+
+dataset_userpicture_num <- spread(dataset_categorized_userpicture_num_transaction,
+                                  key = Category, value = num_transactions_percantage,
+                                  fill = 0, sep = "_")
+names(dataset_userpicture_num) <- paste0("num_", names(dataset_userpicture_num))
+
+dataset_userpicture_sum <- spread(dataset_categorized_userpicture_sum_transaction,
+                                  key = Category, value = sum_transactions_percantage,
+                                  fill = 0, sep = "_")
+names(dataset_userpicture_sum) <- paste0("sum_", names(dataset_userpicture_sum))
+
+detach("package:plyr", unload=TRUE)
+detach("package:tidyr", unload=TRUE)
+detach("package:dplyr", unload=TRUE)
+library(dplyr)
+
+client_dataset <- left_join(client_dataset, dataset_userpicture_num, by = c("CLIENT_ID" = "num_CLIENT_ID"))
+client_dataset <- left_join(client_dataset, dataset_userpicture_sum, by = c("CLIENT_ID" = "sum_CLIENT_ID"))
+
+dim(client_dataset)
+
+sum(is.na(client_dataset))
+
+saveRDS(object = client_dataset, file = "data/client_dataset_with_categories.rds")
