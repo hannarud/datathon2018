@@ -1,6 +1,8 @@
 Sys.setlocale(category = "LC_CTYPE", locale = "Russian")
 
-client_dataset <- readRDS("data/client_dataset.rds")
+library(dplyr)
+
+client_dataset <- readRDS("data/client_dataset_with_categories.rds")
 
 client_dataset$reg_gender_strata <- ifelse(client_dataset$GENDER == "M",
                                            ifelse(client_dataset$CLIENT_REGION == "Minsk",
@@ -19,23 +21,51 @@ cols_of_interest <- setdiff(names(client_dataset), c("CLIENT_ID", "GENDER", "IS_
                                                      "CLIENT_REGION", "HAS_CREDIT_CARD", "NUMBER_OF_CARDS",
                                                      "HAS_FOREIGN_CURRENCY_CARD", "reg_gender_strata", "NUMBER_OF_CARDS_1_2_more"))
 
+categ_names <- names(client_dataset)[grep("[sn]um_Category_", names(client_dataset))]
+
+cols_of_interest <- setdiff(cols_of_interest, categ_names)
+
+
 for(i in cols_of_interest) {
   print(i)
-  start = log(min(client_dataset[[i]]))
-  if(is.infinite(start)) {
-    start = 0
-  }
-  seqq = seq(from = start, to = log(max(client_dataset[[i]])), by = 1)
-  if(length(seqq < 3)) {
-    seqq = seq(from = start, to = log(max(client_dataset[[i]])), length.out = 4)
-  }
-  if(length(seqq > 6)) {
-    seqq = seq(from = start, to = log(max(client_dataset[[i]])), length.out = 5)
-  }
   
-  client_dataset[[paste0(i, "_factor")]] <- cut(log(client_dataset[[i]]), breaks = seqq)
+  if(i %in% c("percent_transactions_BYN")) {
+    start = log(min(100- client_dataset[[i]]))
+    if(is.infinite(start)) {
+      start = 0
+    }
+    seqq = seq(from = start, to = log(max(100 - client_dataset[[i]])), by = 1)
+    if(length(seqq < 3)) {
+      seqq = seq(from = start, to = log(max(100 - client_dataset[[i]])), length.out = 4)
+    }
+    if(length(seqq > 6)) {
+      seqq = seq(from = start, to = log(max(100 - client_dataset[[i]])), length.out = 5)
+    }
+    
+    client_dataset[[paste0(i, "_factor")]] <- cut(log(100 - client_dataset[[i]]), breaks = seqq)
+  } else {
+    start = log(min(client_dataset[[i]]))
+    if(is.infinite(start)) {
+      start = 0
+    }
+    seqq = seq(from = start, to = log(max(client_dataset[[i]])), by = 1)
+    if(length(seqq < 3)) {
+      seqq = seq(from = start, to = log(max(client_dataset[[i]])), length.out = 4)
+    }
+    if(length(seqq > 6)) {
+      seqq = seq(from = start, to = log(max(client_dataset[[i]])), length.out = 5)
+    }
+    
+    client_dataset[[paste0(i, "_factor")]] <- cut(log(client_dataset[[i]]), breaks = seqq)
+  }
 }
 
+for(i in categ_names) {
+  print(i)
+  client_dataset[[paste0(i, "_factor")]] <- cut(log(client_dataset[[i]]), breaks = c(0, 20, 40, 60, 80, 100))
+}
+
+write.csv2(client_dataset, "data/client_dataset_discretized.csv", row.names = FALSE)
 
 trial <- as.data.frame(table(client_dataset$GENDER,
                              client_dataset$IS_RESIDENT,
@@ -54,66 +84,113 @@ apply(trial, 2, table)
 # Выводы
 # Мы можем исключить и выделить сразу в отдельные кластеры тех, у кого
 # 
+table(client_dataset$IS_RESIDENT) # Можно удалить 0
+table(client_dataset$IS_CITIZEN) # Можно удалить 0
+table(client_dataset$HAS_CREDIT_CARD) # Можно удалить 1
+table(client_dataset$NUMBER_OF_CARDS_1_2_more) # Можно удалить more
+table(client_dataset$total_amount_of_transactions_factor) # Можно удалить (5.93,7.91]
+
+client_dataset_filtered <- filter(client_dataset, ! (IS_RESIDENT == 0) &
+                                    ! (IS_CITIZEN == 0) &
+                                    ! (HAS_CREDIT_CARD == 1) &
+                                    ! (NUMBER_OF_CARDS_1_2_more == "more") &
+                                    ! (as.character(total_amount_of_transactions_factor) == "(5.93,7.91]"))
+
+trial <- as.data.frame(table(client_dataset$reg_gender_strata,
+                             client_dataset$AGE_factor,
+                             client_dataset$HAS_FOREIGN_CURRENCY_CARD,
+                             client_dataset$NUMBER_OF_CARDS_1_2_more,
+                             client_dataset$percent_sum_BYN_factor,
+                             client_dataset$percent_transactions_BYN_factor,
+                             client_dataset$percent_sum_abroad_factor,
+                             client_dataset$percent_transactions_abroad_factor,
+                             client_dataset$total_amount_of_transactions_factor,
+                             client_dataset$total_amount_paid_factor))
+
+# Теперь категорий слишком много, нужно что-то пообъединять
+
+trial <- as.data.frame(table(client_dataset$reg_gender_strata,
+                             client_dataset$AGE_factor,
+                             client_dataset$HAS_FOREIGN_CURRENCY_CARD,
+                             client_dataset$percent_sum_BYN_factor,
+                             client_dataset$percent_transactions_BYN_factor,
+                             client_dataset$percent_sum_abroad_factor,
+                             client_dataset$percent_transactions_abroad_factor))
+
+trial <- trial[trial$Freq > 100, ]
+
+names(trial) <- c("reg_gender_strata",
+                  "AGE_factor",
+                  "HAS_FOREIGN_CURRENCY_CARD",
+                  "percent_sum_BYN_factor",
+                  "percent_transactions_BYN_factor",
+                  "percent_sum_abroad_factor",
+                  "percent_transactions_abroad_factor",
+                  "Freq")
+ 
 
 
-write.csv2(client_dataset, file = "data/client_dataset_discretized.csv", row.names = FALSE)
+trial <- as.data.frame(table(client_dataset$HAS_FOREIGN_CURRENCY_CARD,
+                             client_dataset$percent_sum_BYN_factor,
+                             client_dataset$percent_transactions_BYN_factor,
+                             client_dataset$percent_sum_abroad_factor,
+                             client_dataset$percent_transactions_abroad_factor))
+
+# Допустим, мы возьмем группу 280 пользователей
+
+# group <- filter(client_dataset, HAS_FOREIGN_CURRENCY_CARD == 0 &
+#          as.character(percent_sum_BYN_factor) == "(3.45,4.61]" &
+#          as.character(percent_transactions_BYN_factor) == "(3.45,4.61]" &
+#          as.character(percent_sum_abroad_factor) == "(3.45,4.61]" &
+#          as.character(percent_transactions_abroad_factor) == "(3.45,4.61]")
+
+group <- filter(client_dataset, HAS_FOREIGN_CURRENCY_CARD == 1 &
+                  NUMBER_OF_CARDS_1_2_more == "one")
+
+
+library(ggplot2)
+# Barplot
+
+group_summarized <- group %>% select(CLIENT_ID, starts_with("sum_Category_")) %>% select(- ends_with("factor"))
+
+library(tidyr)
+group_summarized_one <- group_summarized %>% gather(Category, percentage, sum_Category_Clothes:sum_Category_Transport)
+
+bp<- ggplot(group_summarized_one, aes(x="", y=percentage, fill=Category))+
+  geom_bar(width = 1, stat = "identity")
+bp
+
+pie <- bp + coord_polar("y", start=0)
+pie
+
+
+
+
+library(ggplot2)
+# Barplot
+
+all_summarized <- client_dataset %>% select(CLIENT_ID, starts_with("sum_Category_")) %>% select(- ends_with("factor"))
+
+library(tidyr)
+all_summarized_one <- all_summarized %>% gather(Category, percentage, sum_Category_Clothes:sum_Category_Transport)
+
+bp<- ggplot(all_summarized_one, aes(x="", y=percentage, fill=Category))+
+  geom_bar(width = 1, stat = "identity")
+bp
+
+pie <- bp + coord_polar("y", start=0)
+pie
 
 
 
 
 
 
-> names(client_dataset)
-[1] "CLIENT_ID"                                              
-[2] "GENDER"                                                 
-[3] "IS_RESIDENT"                                            
-[4] "IS_CITIZEN"                                             
-[5] "CLIENT_REGION"                                          
-[6] "AGE"                                                    
-[7] "HAS_CREDIT_CARD"                                        
-[8] "NUMBER_OF_CARDS"                                        
-[9] "HAS_FOREIGN_CURRENCY_CARD"                              
-[10] "total_amount_of_transactions"                           
-[11] "total_amount_paid"                                      
-[12] "max_sum_ever"                                           
-[13] "mode_sum_ever"                                          
-[14] "med_sum_ever"                                           
-[15] "min_sum_ever"                                           
-[16] "max_num_of_transactions_per_day"                        
-[17] "median_num_of_transactions_per_day"                     
-[18] "max_num_of_transactions_per_month_standartized"         
-[19] "min_num_of_transactions_per_month_standartized"         
-[20] "sigma_num_of_transactions_per_month_standartized"       
-[21] "max_total_amount_of_payments_per_month"                 
-[22] "min_total_amount_of_payments_per_month"                 
-[23] "sigma_total_amount_of_payments_per_month"               
-[24] "sigma_average_sum_of_payments_per_month"                
-[25] "reg_gender_strata"                                      
-[26] "NUMBER_OF_CARDS_1_2_more"                               
-[27] "AGE_factor"                                             
-[28] "total_amount_of_transactions_factor"                    
-[29] "total_amount_paid_factor"                               
-[30] "max_sum_ever_factor"                                    
-[31] "mode_sum_ever_factor"                                   
-[32] "med_sum_ever_factor"                                    
-[33] "min_sum_ever_factor"                                    
-[34] "max_num_of_transactions_per_day_factor"                 
-[35] "median_num_of_transactions_per_day_factor"              
-[36] "max_num_of_transactions_per_month_standartized_factor"  
-[37] "min_num_of_transactions_per_month_standartized_factor"  
-[38] "sigma_num_of_transactions_per_month_standartized_factor"
-[39] "max_total_amount_of_payments_per_month_factor"          
-[40] "min_total_amount_of_payments_per_month_factor"          
-[41] "sigma_total_amount_of_payments_per_month_factor"        
-[42] "sigma_average_sum_of_payments_per_month_factor" 
 
-
-
-
-
-
-
-
+p <- ggplot(group_summarized_one, aes(x="", y=percentage, fill=Category)) + 
+  geom_bar(position="dodge", stat="identity") + coord_flip() + 
+  theme(axis.text.y=element_text(angle=0, hjust=1))
+p
 
 
 # write.csv2(x = client_dataset, file = "docs/client_dataset.csv", row.names = FALSE)
